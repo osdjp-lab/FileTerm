@@ -6,6 +6,8 @@
 #include <menu.h>
 using namespace std;
 
+int create_menu_items(filesystem::path dir, vector<string*>* const &entry_names, ITEM** &menu_items, int *nr_choices);
+
 int main() {
 	// Initialize curses
 	initscr();
@@ -32,8 +34,8 @@ int main() {
 	// Initialize items
 	WINDOW *my_menu_win;
 	MENU *my_menu;
-	int n_choices;
-	ITEM **my_items;
+	int nr_choices;
+	ITEM **menu_items;
 
 	// Create vector of pointers to strings to hold directory entries
 	vector<string*>* entry_names = new vector<string*>();
@@ -41,41 +43,17 @@ int main() {
 	// Get current directory
 	filesystem::path dir = filesystem::current_path();
 
-    if (std::filesystem::exists(dir)) {
-        if (std::filesystem::is_directory(dir)) {
+	// Create menu items
+	int state = create_menu_items(dir, entry_names, menu_items, &nr_choices);
 
-			// Count number of entries
-			n_choices = 0;
-			for (auto it = filesystem::begin(filesystem::directory_iterator(dir)); it != filesystem::end(filesystem::directory_iterator(dir)); ++it) {
-				n_choices++;
-			}
-
-			// Allocate space for items
-			my_items = (ITEM **)calloc(n_choices + 1, sizeof(ITEM *));
-
-			// Create items
-			int i = 0;
-			for (auto it = filesystem::begin(filesystem::directory_iterator(dir)); it != filesystem::end(filesystem::directory_iterator(dir)); ++it) {
-				string name = it->path().filename().string();
-				entry_names->push_back(new string(name));
-				my_items[i] = new_item((*entry_names)[i]->c_str(), "");
-				i++;
-			}
-        } else {
-			mvprintw(LINES - 2, 0, "Path %s is not a directory", dir.c_str());
-			getch();
-			endwin();
-			return 1;
-		}
-    } else {
-		mvprintw(LINES - 2, 0, "Path %s does not exist", dir.c_str());
-        getch();
-        endwin();
-        return 1;
-    }
+	if (state == 1) {
+		getch();
+		endwin();
+		return 1;
+	}
 
 	// Create menu
-	my_menu = new_menu((ITEM **)my_items);
+	my_menu = new_menu((ITEM **)menu_items);
 
 	// Create the window to be associated with the menu
 	my_menu_win = newwin((LINES - 2) / 2, (COLS - 2) / 2, 1, 1);
@@ -137,15 +115,47 @@ int main() {
 	free_menu(my_menu);
 
 	// Free memory taken up by items
-	for (int i = 0; i < n_choices; ++i)
-		free_item(my_items[i]);
+	for (int i = 0; i < nr_choices; ++i)
+		free_item(menu_items[i]);
 
 	// Free memory taken up by item names
-	for (int i = 0; i < n_choices; ++i)
+	for (int i = 0; i < nr_choices; ++i)
 		delete entry_names->at(i);
 	delete entry_names;
 
 	// End curses mode
 	endwin();
+	return 0;
+}
+
+int create_menu_items(filesystem::path dir, vector<string*>* const &entry_names, ITEM** &menu_items, int *nr_choices) {
+	if (std::filesystem::exists(dir)) {
+        if (std::filesystem::is_directory(dir)) {
+
+			// Count number of entries in directory
+			*nr_choices = 0;
+			for (auto it = filesystem::begin(filesystem::directory_iterator(dir)); it != filesystem::end(filesystem::directory_iterator(dir)); ++it) {
+				*nr_choices++;
+			}
+
+			// Allocate space for items
+			menu_items = (ITEM **)calloc(*nr_choices + 1, sizeof(ITEM *));
+
+			// Create entry name strings and menu items
+			int i = 0;
+			for (auto it = filesystem::begin(filesystem::directory_iterator(dir)); it != filesystem::end(filesystem::directory_iterator(dir)); ++it) {
+				string* name = new string(it->path().filename().string());
+				entry_names->push_back(name);
+				menu_items[i] = new_item((*entry_names)[i]->c_str(), "");
+				i++;
+			}
+        } else {
+			mvprintw(LINES - 2, 0, "Path %s is not a directory", dir.c_str());
+			return 1;
+		}
+    } else {
+		mvprintw(LINES - 2, 0, "Path %s does not exist", dir.c_str());
+        return 1;
+    }
 	return 0;
 }
