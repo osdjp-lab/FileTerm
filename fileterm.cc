@@ -7,6 +7,7 @@
 using namespace std;
 
 int create_menu_items(filesystem::path dir, vector<string*>* const &entry_names, ITEM** &menu_items, int *nr_choices);
+int create_menu_window(WINDOW* &my_menu_win, MENU* &my_menu, ITEM** &menu_items, filesystem::path dir);
 
 int main() {
 	// Initialize curses
@@ -32,10 +33,13 @@ int main() {
 	init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
 
 	// Initialize items
-	WINDOW *my_menu_win;
-	MENU *my_menu;
+	WINDOW* my_menu_win;
+	MENU* my_menu;
 	int nr_choices;
-	ITEM **menu_items;
+	ITEM** menu_items;
+
+	// Function return value
+	int state;
 
 	// Create vector of pointers to strings to hold directory entries
 	vector<string*>* entry_names = new vector<string*>();
@@ -44,7 +48,7 @@ int main() {
 	filesystem::path dir = filesystem::current_path();
 
 	// Create menu items
-	int state = create_menu_items(dir, entry_names, menu_items, &nr_choices);
+	state = create_menu_items(dir, entry_names, menu_items, &nr_choices);
 
 	if (state == 1) {
 		getch();
@@ -52,32 +56,14 @@ int main() {
 		return 1;
 	}
 
-	// Create menu
-	my_menu = new_menu((ITEM **)menu_items);
+	// Create menu in window with border
+	state = create_menu_window(my_menu_win, my_menu, menu_items, dir);
 
-	// Create the window to be associated with the menu
-	my_menu_win = newwin((LINES - 2) / 2, (COLS - 2) / 2, 1, 1);
-	keypad(my_menu_win, TRUE);
-
-	// Set main window and sub window
-	set_menu_win(my_menu, my_menu_win);
-	set_menu_sub(my_menu, derwin(my_menu_win, ((LINES - 2) / 2) - 4, ((COLS - 2) / 2) - 2, 3, 1));
-	set_menu_format(my_menu, ((LINES - 2) / 2) - 4, 1);
-
-	// Set menu mark to the string " * "
-	set_menu_mark(my_menu, " * ");
-
-	// Print a border around the main window
-	box(my_menu_win, 0, 0);
-
-	// Print the directory path at the top
-	mvwprintw(my_menu_win, 1, 4, "%s", dir.c_str());
-	refresh();
-
-	// Draw line under the directory path
-	mvwaddch(my_menu_win, 2, 0, ACS_LTEE);
-	mvwhline(my_menu_win, 2, 1, ACS_HLINE, ((COLS - 2) / 2) - 2);
-	mvwaddch(my_menu_win, 2, ((COLS - 2) / 2)-1, ACS_RTEE);
+	if (state == 1) {
+		getch();
+		endwin();
+		return 1;
+	}
 
 	// Post the menu
 	post_menu(my_menu);
@@ -157,5 +143,35 @@ int create_menu_items(filesystem::path dir, vector<string*>* const &entry_names,
 		mvprintw(LINES - 2, 0, "Path %s does not exist", dir.c_str());
         return 1;
     }
+	return 0;
+}
+
+int create_menu_window(WINDOW* &my_menu_win, MENU* &my_menu, ITEM** &menu_items, filesystem::path dir) {
+	// Create menu
+	my_menu = new_menu((ITEM **)menu_items);
+
+	// Create the window to be associated with the menu
+	my_menu_win = newwin((LINES - 2) / 2, (COLS - 2) / 2, 1, 1);
+	keypad(my_menu_win, TRUE);
+
+	// Set main window and sub window
+	set_menu_win(my_menu, my_menu_win);
+	set_menu_sub(my_menu, derwin(my_menu_win, ((LINES - 2) / 2) - 4, ((COLS - 2) / 2) - 2, 3, 1));
+	set_menu_format(my_menu, ((LINES - 2) / 2) - 4, 1);
+
+	// Set menu mark to the string " * "
+	set_menu_mark(my_menu, " * ");
+
+	// Print a border around the main window
+	box(my_menu_win, 0, 0);
+
+	// Print the directory path at the top
+	mvwprintw(my_menu_win, 1, 4, "%s", dir.c_str());
+	refresh();
+
+	// Draw line under the directory path
+	mvwaddch(my_menu_win, 2, 0, ACS_LTEE);
+	mvwhline(my_menu_win, 2, 1, ACS_HLINE, ((COLS - 2) / 2) - 2);
+	mvwaddch(my_menu_win, 2, ((COLS - 2) / 2)-1, ACS_RTEE);
 	return 0;
 }
