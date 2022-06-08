@@ -6,8 +6,9 @@
 #include <menu.h>
 using namespace std;
 
-int create_menu_items(filesystem::path dir, vector<string*>* const &entry_names, ITEM** &menu_items, int *nr_choices);
+int create_menu_items(filesystem::path dir, vector<string*>* const &entry_names, ITEM** &menu_items, int &nr_choices);
 int create_menu_window(WINDOW* &my_menu_win, MENU* &my_menu, ITEM** &menu_items, filesystem::path dir);
+int onKeyEnter(WINDOW* &my_menu_win, MENU* &my_menu, vector<string*>* const &entry_names, ITEM** &menu_items, filesystem::path &dir, int &nr_choices);
 
 int main() {
 	// Initialize curses
@@ -48,7 +49,7 @@ int main() {
 	filesystem::path dir = filesystem::current_path();
 
 	// Create menu items
-	state = create_menu_items(dir, entry_names, menu_items, &nr_choices);
+	state = create_menu_items(dir, entry_names, menu_items, nr_choices);
 
 	if (state == 1) {
 		getch();
@@ -92,6 +93,14 @@ int main() {
 		case KEY_PPAGE:
 			menu_driver(my_menu, REQ_SCR_UPAGE);
 			break;
+		case 10:
+			state = onKeyEnter(my_menu_win, my_menu, entry_names, menu_items, dir, nr_choices);
+			if (state == 1) {
+				getch();
+				endwin();
+				return 1;
+			}
+			break;
 		}
 		wrefresh(my_menu_win);
 	}
@@ -105,8 +114,7 @@ int main() {
 		free_item(menu_items[i]);
 
 	// Free memory taken up by item names
-	for (int i = 0; i < nr_choices; ++i)
-		delete entry_names->at(i);
+	entry_names->clear();
 	delete entry_names;
 
 	// End curses mode
@@ -114,25 +122,25 @@ int main() {
 	return 0;
 }
 
-int create_menu_items(filesystem::path dir, vector<string*>* const &entry_names, ITEM** &menu_items, int *nr_choices) {
+int create_menu_items(filesystem::path dir, vector<string*>* const &entry_names, ITEM** &menu_items, int &nr_choices) {
 	if (std::filesystem::exists(dir)) {
         if (std::filesystem::is_directory(dir)) {
 
 			// Count number of entries in directory
-			*nr_choices = 0;
+			nr_choices = 0;
 			for (auto it = filesystem::begin(filesystem::directory_iterator(dir)); it != filesystem::end(filesystem::directory_iterator(dir)); ++it) {
-				*nr_choices++;
+				nr_choices++;
 			}
 
 			// Allocate space for items
-			menu_items = (ITEM **)calloc(*nr_choices + 1, sizeof(ITEM *));
+			menu_items = (ITEM **)calloc(nr_choices + 1, sizeof(ITEM *));
 
 			// Create entry name strings and menu items
 			int i = 0;
 			for (auto it = filesystem::begin(filesystem::directory_iterator(dir)); it != filesystem::end(filesystem::directory_iterator(dir)); ++it) {
 				string* name = new string(it->path().filename().string());
 				entry_names->push_back(name);
-				menu_items[i] = new_item((*entry_names)[i]->c_str(), "");
+				menu_items[i] = new_item(name->c_str(), "");
 				i++;
 			}
         } else {
@@ -173,5 +181,45 @@ int create_menu_window(WINDOW* &my_menu_win, MENU* &my_menu, ITEM** &menu_items,
 	mvwaddch(my_menu_win, 2, 0, ACS_LTEE);
 	mvwhline(my_menu_win, 2, 1, ACS_HLINE, ((COLS - 2) / 2) - 2);
 	mvwaddch(my_menu_win, 2, ((COLS - 2) / 2)-1, ACS_RTEE);
+	return 0;
+}
+
+int onKeyEnter(WINDOW* &my_menu_win, MENU* &my_menu, vector<string*>* const &entry_names, ITEM** &menu_items, filesystem::path &dir, int &nr_choices) {
+	// Check if entry is a directory
+	if (filesystem::is_directory(dir / item_name(current_item(my_menu)))) {
+
+		// Change directory
+		dir = dir / item_name(current_item(my_menu));
+
+		// Unpost and free memory taken up by the menu
+		unpost_menu(my_menu);
+		free_menu(my_menu);
+		for (int i = 0; i < nr_choices; i++) {
+			free_item(menu_items[i]);
+		}
+		free(menu_items);
+
+		// Free memory
+		entry_names->clear();
+		// for (int i = 0; i < nr_choices; ++i)
+		// 	delete entry_names->at(i);
+
+		// Create menu items
+		int state = create_menu_items(dir, entry_names, menu_items, nr_choices);
+		if (state == 1) {
+			return 1;
+		}
+
+		// Create menu in window with border
+		state = create_menu_window(my_menu_win, my_menu, menu_items, dir);
+		if (state == 1) {
+			return 1;
+		}
+
+		// Post the menu
+		post_menu(my_menu);
+		wrefresh(my_menu_win);
+		return 0;
+	}
 	return 0;
 }
